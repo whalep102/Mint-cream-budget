@@ -487,6 +487,13 @@ function renderTransactionsView() {
         <span>พบ <strong>${filtered.length}</strong> รายการ</span>
         <span>รับ <strong>${formatBaht(totalIn)}</strong> • จ่าย <strong>${formatBaht(totalOut)}</strong> • ออม <strong>${formatBaht(totalSav)}</strong></span>
       </div>
+
+      <div class="quick-actions">
+        <button id="qa-income" class="btn btn-soft btn-sm" type="button">+ รายรับ</button>
+        <button id="qa-expense" class="btn btn-peach btn-sm" type="button">+ รายจ่าย</button>
+        <button id="qa-savings" class="btn btn-goal btn-sm" type="button">+ ออมเข้าเป้า</button>
+        ${filtered.length ? `<button id="qa-delete-all" class="btn btn-sm btn-danger-soft" type="button">🗑️ ลบทั้งหมดที่แสดง (${filtered.length})</button>` : ''}
+      </div>
     </article>
 
     <article class="card">
@@ -517,6 +524,24 @@ function renderTransactionsView() {
   const endEl = document.getElementById('filter-end');
   if (startEl) startEl.addEventListener('change', (e) => { uiState.txFilter.customStart = e.target.value; renderTransactionsView(); });
   if (endEl) endEl.addEventListener('change', (e) => { uiState.txFilter.customEnd = e.target.value; renderTransactionsView(); });
+
+  document.getElementById('qa-income').addEventListener('click', () => openTransactionSheet({ presetType: 'income' }));
+  document.getElementById('qa-expense').addEventListener('click', () => openTransactionSheet({ presetType: 'expense' }));
+  document.getElementById('qa-savings').addEventListener('click', () => openTransactionSheet({ presetType: 'savings' }));
+
+  const delAllBtn = document.getElementById('qa-delete-all');
+  if (delAllBtn) {
+    delAllBtn.addEventListener('click', async () => {
+      const ids = filtered.map((t) => t.id);
+      if (!window.confirm(`ลบ ${ids.length} รายการที่แสดงอยู่ทั้งหมด?\n(ย้อนกลับไม่ได้ — ถ้าไม่แน่ใจให้กรองเดือน/ประเภทก่อน)`)) return;
+      delAllBtn.disabled = true;
+      delAllBtn.textContent = 'กำลังลบ...';
+      for (const id of ids) {
+        await store.deleteTransaction(id);
+      }
+      showToast(`ลบ ${ids.length} รายการแล้ว`);
+    });
+  }
 
   bindTransactionRowClicks(container);
 }
@@ -1710,20 +1735,35 @@ function renderTransactionRow(tx, catMap) {
   const cat = catMap[tx.categoryId] || { icon: '🌿', name: 'อื่น ๆ', color: '#E2ECE9' };
   const sign = tx.type === 'income' ? '+' : tx.type === 'expense' ? '-' : '↗ ';
   return `
-    <button class="tx-item" data-edit-tx="${escapeHtml(tx.id)}" type="button">
-      <div class="tx-left">
-        <span class="tx-icon" style="background:${escapeHtml(cat.color || '#E2ECE9')}">${escapeHtml(cat.icon || '🌿')}</span>
-        <div class="tx-meta">
-          <div class="tx-title">${escapeHtml(cat.name)}</div>
-          <div class="tx-sub">${formatThaiDate(tx.date)}${tx.note ? ` • ${escapeHtml(tx.note)}` : ''}</div>
+    <div class="tx-row">
+      <button class="tx-item" data-edit-tx="${escapeHtml(tx.id)}" type="button">
+        <div class="tx-left">
+          <span class="tx-icon" style="background:${escapeHtml(cat.color || '#E2ECE9')}">${escapeHtml(cat.icon || '🌿')}</span>
+          <div class="tx-meta">
+            <div class="tx-title">${escapeHtml(cat.name)}</div>
+            <div class="tx-sub">${formatThaiDate(tx.date)}${tx.note ? ` • ${escapeHtml(tx.note)}` : ''}</div>
+          </div>
         </div>
-      </div>
-      <div class="tx-amount ${escapeHtml(tx.type)}">${sign}${formatBaht(tx.amount)}</div>
-    </button>
+        <div class="tx-amount ${escapeHtml(tx.type)}">${sign}${formatBaht(tx.amount)}</div>
+      </button>
+      <button class="tx-del" data-del-tx="${escapeHtml(tx.id)}" type="button" aria-label="ลบรายการนี้" title="ลบรายการนี้">🗑️</button>
+    </div>
   `;
 }
 
 function bindTransactionRowClicks(root) {
+  // ปุ่มถังขยะ: ลบทันที (มีปุ่มเลิกทำ 5 วินาที)
+  root.querySelectorAll('[data-del-tx]').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const removed = await store.deleteTransaction(btn.dataset.delTx);
+      if (removed) {
+        showToast('ลบรายการแล้ว', async () => {
+          await store.saveTransaction(removed, { skipUsageIncrement: true });
+        });
+      }
+    });
+  });
   root.querySelectorAll('[data-edit-tx]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const tx = store.state.transactions.find((t) => t.id === btn.dataset.editTx);
