@@ -10,12 +10,12 @@
  */
 
 export const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyDuucMKhcMlhUrLKWMzO-5gQaJx4d1J8fk",
+  authDomain: "mintcream-budget.firebaseapp.com",
+  projectId: "mintcream-budget",
+  storageBucket: "mintcream-budget.firebasestorage.app",
+  messagingSenderId: "663045110232",
+  appId: "1:663045110232:web:0a7b2e6c0c14d1e4971aad"
 };
 
 /**
