@@ -351,6 +351,32 @@ export class BudgetStore {
    * โดยจะสร้างเพียง 1 ครั้งต่อสัปดาห์ เพื่อให้ผู้ใช้แก้ยอดเฉพาะสัปดาห์นั้นได้ตามใจ
    */
   async ensureWeeklyRecurringIncome(todayIso = getTodayBangkok()) {
+    // กันการทำงานซ้อนกัน (ซิงก์ถี่ ๆ เคยทำให้สร้างรายการซ้ำเป็นร้อย)
+    if (this._ensuringWeekly) return;
+    this._ensuringWeekly = true;
+    try {
+      await this._ensureWeeklyRecurringIncomeInner(todayIso);
+    } finally {
+      this._ensuringWeekly = false;
+    }
+  }
+
+  async _ensureWeeklyRecurringIncomeInner(todayIso) {
+    // ลบรายการอัตโนมัติที่ซ้ำ (บิลเดียวกัน สัปดาห์เดียวกัน) เหลือไว้ 1 รายการ
+    const seen = new Set();
+    const dupes = [];
+    const autoTx = this.state.transactions
+      .filter((t) => t.recurringId && t.periodKey && /อัตโนมัติประจำสัปดาห์/.test(t.note || ''))
+      .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    for (const t of autoTx) {
+      const key = `${t.recurringId}|${t.periodKey}`;
+      if (seen.has(key)) dupes.push(t.id);
+      else seen.add(key);
+    }
+    for (const id of dupes) {
+      await this.deleteTransaction(id);
+    }
+
     const week = getMondayWeekRange(todayIso);
     const weeklyItems = this.state.recurring.filter(
       (r) => r.frequency === 'weekly' && r.type === 'income' && r.active !== false
@@ -362,8 +388,12 @@ export class BudgetStore {
       const scheduledDate = addDays(week.start, offset);
       const periodKey = week.start;
 
-      if (todayIso >= scheduledDate && !rec.appliedPeriods?.[periodKey]) {
-        const txId = generateId('tx');
+      const alreadyCreated = this.state.transactions.some(
+        (t) => t.recurringId === rec.id && t.periodKey === periodKey
+      );
+      if (todayIso >= scheduledDate && !rec.appliedPeriods?.[periodKey] && !alreadyCreated) {
+        // ใช้ id ตายตัวต่อบิล+สัปดาห์ ต่อให้เรียกซ้ำก็เขียนทับรายการเดิม ไม่เกิดซ้ำ
+        const txId = `tx_auto_${rec.id}_${periodKey}`;
         const newTx = {
           id: txId,
           type: 'income',
