@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#A8E6CF" />
+  <meta name="description" content="MintCream Budget — เว็บแอปบันทึกรายรับรายจ่ายและวางแผนเก็บเงินซื้อโน้ตบุ๊กแบบนุ่มนวล" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="MintCream" />
+
+  <title>MintCream Budget — บันทึกรายรับรายจ่าย & เป้าหมายโน้ตบุ๊ก</title>
+
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="./icons/icon.svg" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+
+  <!-- ฟอนต์ Noto Sans Thai จาก Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="./style.css" />
+
+  <!-- Chart.js จาก CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js" defer></script>
+</head>
+<body>
+  <!-- หน้าจอเข้าสู่ระบบ (แสดงเฉพาะเมื่อตั้งค่า Firebase แล้วและยังไม่ได้ลงชื่อเข้าใช้) -->
+  <div id="auth-gate" class="auth-gate hidden" aria-live="polite">
+    <div class="auth-card">
+      <div class="brand-badge">🌿</div>
+      <h1>MintCream Budget</h1>
+      <p class="auth-subtitle">
+        พื้นที่เก็บเงินซื้อโน้ตบุ๊กแบบสบายใจ ซิงก์ข้อมูลอัตโนมัติทั้งมือถือและคอมพิวเตอร์
+      </p>
+      <button id="btn-google-signin" class="btn btn-primary btn-full" type="button">
+        <span>🔐</span> เข้าสู่ระบบด้วย Google
+      </button>
+      <p class="auth-note">ข้อมูลของคุณแยกเก็บส่วนตัวเฉพาะบัญชีของคุณเท่านั้น</p>
+    </div>
+  </div>
+
+  <!-- โครงสร้างหลักของแอป (Sidebar บนคอม / Bottom Nav บนมือถือ) -->
+  <div id="app-shell" class="app-shell">
+    <!-- Sidebar สำหรับหน้าจอคอมพิวเตอร์ -->
+    <aside class="sidebar" aria-label="เมนูหลัก">
+      <div class="sidebar-brand">
+        <span class="brand-logo" aria-hidden="true">🌿</span>
+        <div>
+          <div class="brand-name">MintCream</div>
+          <div class="brand-tag">เก็บเงินซื้อโน้ตบุ๊ก</div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-full sidebar-add-btn" id="desktop-add-btn" type="button">
+        <span class="plus-icon">+</span> บันทึกรายการใหม่
+      </button>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-view="dashboard" type="button">
+          <span class="nav-icon" aria-hidden="true">🏠</span>
+          <span>Dashboard</span>
+        </button>
+        <button class="nav-item" data-view="transactions" type="button">
+          <span class="nav-icon" aria-hidden="true">🧾</span>
+          <span>รายการทั้งหมด</span>
+        </button>
+        <button class="nav-item" data-view="goal" type="button">
+          <span class="nav-icon" aria-hidden="true">💻</span>
+          <span>เป้าหมาย</span>
+        </button>
+        <button class="nav-item" data-view="reports" type="button">
+          <span class="nav-icon" aria-hidden="true">📊</span>
+          <span>รายงาน</span>
+        </button>
+        <button class="nav-item" data-view="settings" type="button">
+          <span class="nav-icon" aria-hidden="true">⚙️</span>
+          <span>ตั้งค่า</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div id="sidebar-sync-pill" class="sync-pill">🌿 โหมดบนเครื่อง</div>
+      </div>
+    </aside>
+
+    <!-- พื้นที่เนื้อหาหลัก -->
+    <div class="main-column">
+      <!-- แถบหัวด้านบน (มือถือและคอม) -->
+      <header class="topbar">
+        <div>
+          <h1 id="page-title" class="page-title">Dashboard</h1>
+          <p id="page-date" class="page-date"></p>
+        </div>
+        <div class="topbar-actions">
+          <span id="mobile-sync-pill" class="sync-pill">🌿 โหมดบนเครื่อง</span>
+          <button id="mobile-settings-btn" class="mobile-settings-btn" data-view="settings" type="button" aria-label="ตั้งค่า">⚙️</button>
+          <button id="btn-install-pwa" class="btn btn-soft hidden" type="button">
+            📲 ติดตั้งแอป
+          </button>
+        </div>
+      </header>
+
+      <!-- แบนเนอร์แจ้งโหมดบนเครื่อง (ซ่อนอัตโนมัติเมื่อเชื่อมต่อ Firebase แล้ว) -->
+      <div id="local-mode-banner" class="info-banner hidden">
+        <span>💡 ตอนนี้กำลังใช้งานแบบเก็บข้อมูลบนเครื่องนี้ (Local Mode) — เมื่อใส่ค่าใน <code>firebase-config.js</code> จะซิงก์ข้ามมือถือและคอมได้ทันที</span>
+      </div>
+
+      <!-- พื้นที่แสดงแต่ละหน้า (สลับแบบ SPA) -->
+      <main id="main-content" class="main-content" tabindex="-1">
+        <!-- 1. Dashboard -->
+        <section id="view-dashboard" class="view active" aria-label="หน้าแรก Dashboard"></section>
+
+        <!-- 2. รายการทั้งหมด -->
+        <section id="view-transactions" class="view hidden" aria-label="รายการทั้งหมด"></section>
+
+        <!-- 3. เป้าหมายโน้ตบุ๊ก -->
+        <section id="view-goal" class="view hidden" aria-label="เป้าหมายโน้ตบุ๊ก"></section>
+
+        <!-- 4. รายงานและกราฟ -->
+        <section id="view-reports" class="view hidden" aria-label="รายงานและกราฟ"></section>
+
+        <!-- 5. ตั้งค่า -->
+        <section id="view-settings" class="view hidden" aria-label="ตั้งค่า"></section>
+      </main>
+    </div>
+
+    <!-- แถบนำทางด้านล่างสำหรับมือถือ พร้อมปุ่ม "+" ลอยตรงกลาง -->
+    <nav class="bottom-nav" aria-label="แถบนำทางมือถือ">
+      <button class="bottom-nav-item active" data-view="dashboard" type="button">
+        <span class="nav-icon" aria-hidden="true">🏠</span>
+        <span>หน้าแรก</span>
+      </button>
+      <button class="bottom-nav-item" data-view="transactions" type="button">
+        <span class="nav-icon" aria-hidden="true">🧾</span>
+        <span>รายการ</span>
+      </button>
+
+      <div class="fab-slot">
+        <button id="mobile-fab-btn" class="fab-btn" type="button" aria-label="บันทึกรายการใหม่">
+          +
+        </button>
+      </div>
+
+      <button class="bottom-nav-item" data-view="goal" type="button">
+        <span class="nav-icon" aria-hidden="true">💻</span>
+        <span>เป้าหมาย</span>
+      </button>
+      <button class="bottom-nav-item" data-view="reports" type="button">
+        <span class="nav-icon" aria-hidden="true">📊</span>
+        <span>รายงาน</span>
+      </button>
+    </nav>
+    <!-- ปุ่มลัดไปหน้าตั้งค่าบนมือถือ (อยู่ที่หัวหน้าหรือเมนู) -->
+  </div>
+
+  <!-- แผ่นฟอร์มบันทึกรายการจากด้านล่าง (Bottom Sheet) -->
+  <div id="tx-sheet-backdrop" class="sheet-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="tx-sheet-title">
+    <div class="bottom-sheet">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-header">
+        <h2 id="tx-sheet-title">บันทึกรายการใหม่</h2>
+        <button id="tx-sheet-close" class="icon-btn" type="button" aria-label="ปิด">✕</button>
+      </div>
+
+      <form id="tx-form" class="sheet-form" novalidate>
+        <input type="hidden" id="tx-id" />
+
+        <!-- สลับประเภทแบบ Segmented -->
+        <div class="segmented" role="radiogroup" aria-label="ประเภทรายการ">
+          <button type="button" class="seg-btn active" data-type="expense">รายจ่าย</button>
+          <button type="button" class="seg-btn" data-type="income">รายรับ</button>
+          <button type="button" class="seg-btn" data-type="savings">ออมเข้าเป้า</button>
+        </div>
+
+        <!-- ช่องจำนวนเงิน (โฟกัสอัตโนมัติ + แป้นตัวเลข) -->
+        <div class="amount-box">
+          <span class="currency-prefix">฿</span>
+          <input
+            id="tx-amount"
+            type="number"
+            inputmode="decimal"
+            step="any"
+            min="0.01"
+            placeholder="0"
+            required
+            aria-label="จำนวนเงิน (บาท)"
+          />
+        </div>
+
+        <!-- ปุ่มจำนวนเงินลัด -->
+        <div class="quick-amounts">
+          <button type="button" class="chip-btn" data-add="50">+50</button>
+          <button type="button" class="chip-btn" data-add="100">+100</button>
+          <button type="button" class="chip-btn" data-add="500">+500</button>
+          <button type="button" class="chip-btn chip-clear" id="tx-clear-amount">ล้าง</button>
+        </div>
+
+        <!-- เลือกหมวดแบบไอคอน (หมวดที่ใช้บ่อยอยู่ด้านหน้า) -->
+        <div class="form-group">
+          <label class="form-label">เลือกหมวด</label>
+          <div id="tx-category-grid" class="category-grid"></div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="tx-date" class="form-label">วันที่</label>
+            <input id="tx-date" type="date" class="input" required />
+          </div>
+          <div class="form-group">
+            <label for="tx-note" class="form-label">โน้ต (ไม่บังคับ)</label>
+            <input id="tx-note" type="text" class="input" placeholder="เช่น ข้าวมันไก่, เติมน้ำมัน" maxlength="120" />
+          </div>
+        </div>
+
+        <p id="tx-error" class="form-hint hidden" role="alert"></p>
+
+        <div class="sheet-actions">
+          <button type="button" id="tx-delete-btn" class="btn btn-peach hidden">ลบรายการ</button>
+          <button type="button" id="tx-save-continue-btn" class="btn btn-soft">บันทึกแล้วเพิ่มต่อ</button>
+          <button type="submit" id="tx-save-btn" class="btn btn-primary">บันทึก</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- โมดัลอเนกประสงค์ (สำหรับเพิ่มหมวด / เพิ่มบิลประจำ / เพิ่มรุ่นโน้ตบุ๊ก / ยืนยันลบสองชั้น) -->
+  <div id="modal-backdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-card">
+      <div class="sheet-header">
+        <h2 id="modal-title">จัดการข้อมูล</h2>
+        <button id="modal-close" class="icon-btn" type="button" aria-label="ปิด">✕</button>
+      </div>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Toast แจ้งเตือนแบบนุ่มนวลพร้อมปุ่ม Undo 5 วินาที -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- Canvas สำหรับ Confetti เบา ๆ ตอนถึง Milestone เป้าหมาย -->
+  <canvas id="confetti-canvas" class="confetti-canvas hidden" aria-hidden="true"></canvas>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // อนุญาตให้อ่านและเขียนได้เฉพาะเจ้าของบัญชีเท่านั้น
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ปฏิเสธการเข้าถึงเอกสารอื่นทั้งหมดเป็นค่าเริ่มต้นเพื่อความปลอดภัย
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
